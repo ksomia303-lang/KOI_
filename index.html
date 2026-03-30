@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KOI — Auth0 Token Vault Agent Hub</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Sans:opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        vault: {400:'#34d399',500:'#10b981',600:'#059669',700:'#047857',800:'#065f46',900:'#064e3b'},
+        sf: {0:'#060708',1:'#0c0e10',2:'#121516',3:'#191c1e',4:'#212527'},
+        amb: {400:'#fbbf24',500:'#f59e0b'}
+      },
+      fontFamily: {d:['Space Grotesk','sans-serif'],b:['DM Sans','sans-serif']}
+    }
+  }
+}
+</script>
+<style>
+*{scrollbar-width:thin;scrollbar-color:#191c1e transparent}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#191c1e;border-radius:3px}
+body{overflow:hidden;height:100vh;margin:0}
+
+/* Navigation buttons */
+.nav-btn{color:#4a5c52;position:relative;border:none;background:none;cursor:pointer;font-family:'DM Sans',sans-serif;transition:color .2s,background .2s}
+.nav-btn:hover{color:#b0bab3;background:rgba(16,185,129,.04)}
+.nav-btn.active{color:#10b981;background:rgba(16,185,129,.06);font-weight:500}
+.nav-btn.active::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:3px;height:22px;background:linear-gradient(180deg,#10b981,#065f46);border-radius:0 3px 3px 0}
+
+/* Animations */
+.fade-in{animation:fadeUp .4s ease forwards}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes textGlow{0%,100%{text-shadow:0 0 10px rgba(16,185,129,.3)}50%{text-shadow:0 0 25px rgba(16,185,129,.6),0 0 50px rgba(16,185,129,.15)}}
+@keyframes shimmerB{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes vgA{0%,100%{opacity:.3;transform:scale(.9)}50%{opacity:.6;transform:scale(1.1)}}
+@keyframes prA{0%{transform:scale(.8);opacity:1}100%{transform:scale(2.2);opacity:0}}
+@keyframes ta{0%,80%,100%{opacity:.2;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+@keyframes scanM{0%{top:-100%}100%{top:200%}}
+@keyframes rotateBorder{to{--ba:360deg}}
+
+/* Cards */
+.mc{position:relative;overflow:hidden;transition:transform .3s,box-shadow .3s}
+.mc:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,.3)}
+.mc::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 10%,rgba(16,185,129,.25) 50%,transparent 90%);opacity:0;transition:opacity .4s}
+.mc:hover::after{opacity:1}
+
+.tc{position:relative;background:rgba(12,14,16,.95);border:1px solid #141e19;border-radius:14px;padding:20px;transition:transform .35s cubic-bezier(.4,0,.2,1),box-shadow .35s,border-color .35s;overflow:hidden}
+.tc:hover{border-color:rgba(16,185,129,.15);transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.tc::before{content:'';position:absolute;inset:-1px;border-radius:inherit;background:linear-gradient(135deg,rgba(16,185,129,.2),transparent 40%,rgba(251,191,36,.1),transparent 60%,rgba(6,182,212,.1),transparent);z-index:-1;opacity:0;transition:opacity .5s}
+.tc:hover::before{opacity:1}
+
+.ac{background:rgba(12,14,16,.95);border:1px solid #141e19;border-radius:18px;padding:24px;transition:transform .35s,box-shadow .35s;position:relative;overflow:hidden}
+.ac:hover{transform:translateY(-3px);box-shadow:0 16px 50px rgba(0,0,0,.35)}
+.ac::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 10%,rgba(16,185,129,.2) 50%,transparent 90%);opacity:0;transition:opacity .4s}
+.ac:hover::after{opacity:1}
+
+/* Chat */
+.chat-bubble{max-width:78%;animation:fadeUp .3s ease forwards}
+.tdot{width:5px;height:5px;border-radius:50%;background:#3a4a42;display:inline-block;animation:ta 1.4s ease-in-out infinite}
+.tdot:nth-child(2){animation-delay:.2s}
+.tdot:nth-child(3){animation-delay:.4s}
+
+/* Misc */
+.hp{height:3px;border-radius:2px;overflow:hidden;background:#191c1e}
+.hpf{height:100%;border-radius:2px;transition:width 1.5s ease}
+.scan-line{position:absolute;top:-100%;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(16,185,129,.15),transparent);animation:scanM 4s linear infinite}
+
+/* Responsive sidebar */
+@media(max-width:1024px){
+  .sov{position:fixed!important;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:40;opacity:0;pointer-events:none;transition:opacity .3s}
+  .sov.show{opacity:1;pointer-events:auto}
+  .sbar{position:fixed!important;left:0;top:0;bottom:0;z-index:50;transform:translateX(-100%);transition:transform .3s cubic-bezier(.4,0,.2,1)}
+  .sbar.open{transform:translateX(0)}
+}
+@media(max-width:640px){.mob-hide{display:none!important}.mc:hover,.tc:hover,.ac:hover{transform:none}}
+@media(min-width:640px){.mg2{grid-template-columns:repeat(4,1fr)!important}.mg1{grid-template-columns:repeat(2,1fr)!important}.ms{grid-template-columns:2fr 1fr!important}}
+@media(min-width:1024px){.sbar{position:relative!important;transform:none!important}.sov{display:none!important}}
+</style>
+</head>
+<body class="bg-sf-0 text-[#e8ede9] font-b">
+
+<!-- PARTICLES CANVAS -->
+<canvas id="ptc" class="fixed inset-0 z-0 pointer-events-none"></canvas>
+
+<!-- MOUSE GLOW -->
+<div id="mg" class="fixed w-[400px] h-[400px] rounded-full pointer-events-none z-[1] mob-hide" style="background:radial-gradient(circle,rgba(16,185,129,.04) 0%,transparent 70%);transform:translate(-50%,-50%);left:-500px;top:-500px;transition:left .3s ease-out,top .3s ease-out"></div>
+
+<!-- ========== LOADER ========== -->
+<div id="loader" style="position:fixed;inset:0;z-index:9999;background:#060708;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .8s ease">
+  <div class="relative mb-8">
+    <svg width="100" height="120" viewBox="0 0 110 130" class="drop-shadow-2xl">
+      <rect x="8" y="28" width="94" height="94" rx="8" fill="none" stroke="#1a2e24" stroke-width="2.5"/>
+      <circle cx="58" cy="75" r="17" fill="none" stroke="#10b981" stroke-width="2"/>
+      <line x1="58" y1="64" x2="58" y2="58" stroke="#10b981" stroke-width="2.5" stroke-linecap="round"/>
+      <text x="55" y="18" text-anchor="middle" fill="#10b981" font-family="Space Grotesk" font-size="20" font-weight="700">KOI</text>
+    </svg>
+    <div class="absolute inset-0 flex items-center justify-center">
+      <div style="width:32px;height:32px;background:rgba(16,185,129,.1);border-radius:50%;filter:blur(50px);animation:vgA 2s ease-in-out infinite"></div>
+    </div>
+  </div>
+  <p class="font-d text-vault-400 text-2xl tracking-[0.4em] mb-2" style="animation:textGlow 2s ease-in-out infinite">KOI</p>
+  <p class="text-[#2e3e35] text-[10px] tracking-[0.25em] mb-8">AUTH0 TOKEN VAULT AGENT HUB</p>
+  <div style="width:200px;height:2px;background:#191c1e;border-radius:2px;overflow:hidden">
+    <div id="lb" style="width:0%;height:100%;border-radius:2px;background:linear-gradient(90deg,#064e3b,#10b981,#fbbf24,#10b981,#064e3b);background-size:200% 100%;animation:shimmerB 2s linear infinite;transition:width 2s ease"></div>
+  </div>
+  <p id="ls" class="text-[#3a4a42] text-[10px] tracking-[0.2em] mt-4">LOADING...</p>
+  <p class="text-[#1e2e26] text-[8px] mt-6 tracking-widest">BUILT BY SOMIA KHAN</p>
+</div>
+
+<!-- ========== TOAST ========== -->
+<div id="toast-box" class="fixed top-4 right-4 sm:top-6 sm:right-6 z-[150] flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- ========== SIDEBAR OVERLAY ========== -->
+<div id="sov" class="sov" onclick="tSB()"></div>
+
+<!-- ========== MODAL ========== -->
+<div id="mo" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:1rem" onclick="if(event.target===this)clM()">
+  <div id="mc" style="background:#121516;border:1px solid #141e19;border-radius:16px;width:100%;max-width:480px;box-shadow:0 25px 60px rgba(0,0,0,.6);transform:scale(.9);opacity:0;transition:all .3s;max-height:90vh;overflow-y:auto"></div>
+</div>
+
+<!-- ========== NOTIFICATIONS ========== -->
+<div id="nd" style="position:fixed;z-index:90;display:none;top:64px;right:16px">
+  <div style="background:#121516;border:1px solid #141e19;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.5);width:320px;overflow:hidden">
+    <div style="padding:12px 16px;border-bottom:1px solid #141e19;display:flex;align-items:center;justify-content:space-between">
+      <span class="text-xs font-d font-semibold">Notifications</span>
+      <span class="text-[9px] text-vault-500 font-bold">3 NEW</span>
+    </div>
+    <div style="max-height:240px;overflow-y:auto">
+      <div style="padding:12px 16px;border-bottom:1px solid #0f1410;cursor:pointer" onmouseover="this.style.background='rgba(25,28,30,.3)'" onmouseout="this.style.background=''">
+        <div style="display:flex;align-items:start;gap:10px">
+          <div style="width:28px;height:28px;border-radius:8px;background:rgba(16,185,129,.1);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-rotate text-vault-400" style="font-size:9px"></i></div>
+          <div><p class="text-[11px] text-[#b0bab3]">Google Cloud token rotated</p><p class="text-[9px] text-[#2e3e35]">15 min ago</p></div>
+        </div>
+      </div>
+      <div style="padding:12px 16px;border-bottom:1px solid #0f1410;cursor:pointer" onmouseover="this.style.background='rgba(25,28,30,.3)'" onmouseout="this.style.background=''">
+        <div style="display:flex;align-items:start;gap:10px">
+          <div style="width:28px;height:28px;border-radius:8px;background:rgba(239,68,68,.1);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-shield-halved text-red-400" style="font-size:9px"></i></div>
+          <div><p class="text-[11px] text-[#b0bab3]">Blocked access from 203.0.113.42</p><p class="text-[9px] text-[#2e3e35]">31 min ago</p></div>
+        </div>
+      </div>
+      <div style="padding:12px 16px;cursor:pointer" onmouseover="this.style.background='rgba(25,28,30,.3)'" onmouseout="this.style.background=''">
+        <div style="display:flex;align-items:start;gap:10px">
+          <div style="width:28px;height:28px;border-radius:8px;background:rgba(245,158,11,.1);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-clock text-amb-400" style="font-size:9px"></i></div>
+          <div><p class="text-[11px] text-[#b0bab3]">AWS IAM key expires in 7 days</p><p class="text-[9px] text-[#2e3e35]">1 hour ago</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== MAIN APP (hidden until loaded) ========== -->
+<div id="app" style="display:none;opacity:0;transition:opacity 1s ease;display:flex;height:100%;position:relative;z-index:10">
+
+  <!-- SIDEBAR -->
+  <aside id="sbar" class="sbar" style="width:260px;background:rgba(12,14,16,.95);backdrop-filter:blur(20px);border-right:1px solid #141e19;display:flex;flex-direction:column;flex-shrink:0;position:relative">
+    <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(to right,transparent,rgba(16,185,129,.3),transparent)"></div>
+    <div style="height:64px;display:flex;align-items:center;gap:12px;padding:0 20px;border-bottom:1px solid #141e19">
+      <div style="width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,#059669,#047857,#064e3b);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(6,78,59,.4)"><span class="font-d font-bold text-white text-sm">K</span></div>
+      <div style="flex:1"><h1 class="font-d font-bold text-[15px] tracking-wider text-[#e8ede9]">KOI<span class="text-vault-500">.</span></h1><p class="text-[7px] tracking-[0.25em] text-vault-700 font-bold">TOKEN VAULT HUB</p></div>
+      <button id="sbClose" onclick="tSB()" style="width:32px;height:32px;border-radius:8px;background:#191c1e;align-items:center;justify-content:center;color:#4a5c52;border:1px solid #141e19;cursor:pointer;display:none"><i class="fa-solid fa-xmark text-sm"></i></button>
+    </div>
+    <nav style="flex:1;padding:16px 12px;overflow-y:auto">
+      <p class="text-[8px] tracking-[0.2em] text-[#3a4a42] font-bold px-3 mb-2">OVERVIEW</p>
+      <button onclick="go('dashboard');tSB()" data-n="dashboard" class="nav-btn active" style="width:100%;display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;font-size:13px"><i class="fa-solid fa-grid-2" style="width:20px;text-align:center;font-size:11px"></i><span>Dashboard</span></button>
+      <button onclick="go('vault');tSB()" data-n="vault" class="nav-btn" style="width:100%;display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;font-size:13px"><i class="fa-solid fa-vault" style="width:20px;text-align:center;font-size:11px"></i><span>Token Vault</span><span style="margin-left:auto;background:rgba(16,185,129,.1);color:#10b981;font-size:9px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid rgba(16,185,129,.1)">8</span></button>
+      <button onclick="go('agents');tSB()" data-n="agents" class="nav-btn" style="width:100%;display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;font-size:13px"><i class="fa-solid fa-robot" style="width:20px;text-align:center;font-size:11px"></i><span>AI Agents</span></button>
+      <button onclick="go('chat');tSB()" data-n="chat" class="nav-btn" style="width:100%;display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;font-size:13px"><i class="fa-solid fa-comments" style="width:20px;text-align:center;font-size:11px"></i><span>Agent Chat</span></button>
+      <p class="text-[8px] tracking-[0.2em] text-[#3a4a42] font-bold px-3 mb-2 mt-6">SYSTEM</p>
+      <button onclick="go('logs');tSB()" data-n="logs" class="nav-btn" style="width:100%;display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;font-size:13px"><i class="fa-solid fa-scroll" style="width:20px;text-align:center;font-size:11px"></i><span>Audit Logs</span></button>
+      <button onclick="go('threats');tSB()" data-n="threats" class="nav-btn" style="width:100%;display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;font-size:13px"><i class="fa-solid fa-triangle-exclamation" style="width:20px;text-align:center;font-size:11px"></i><span>Threat Monitor</span><span style="margin-left:auto;width:8px;height:8px;border-radius:50%;background:#ef4444;animation:prA 2s ease-out infinite"></span></button>
+    </nav>
+    <div style="padding:16px;border-top:1px solid #141e19">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#10b981,#059669,#f59e0b);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:10px;box-shadow:0 4px 15px rgba(6,78,59,.3)">SK</div>
+        <div style="flex:1;min-width:0"><p class="text-[13px] font-semibold truncate">Somia Khan</p><p class="text-[9px] text-[#3a4a42]">Vault Administrator</p></div>
+      </div>
+      <div style="text-align:center;padding-top:8px;border-top:1px solid #141e19"><p class="text-[7px] tracking-[0.3em] text-[#1a2a22] font-medium">CRAFTED BY SOMIA KHAN</p></div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT AREA -->
+  <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative">
+    <div style="position:absolute;top:-25%;right:-15%;width:500px;height:500px;background:rgba(6,78,59,.1);border-radius:50%;filter:blur(180px);pointer-events:none"></div>
+    <div style="position:absolute;bottom:-20%;left:5%;width:400px;height:400px;background:rgba(245,158,11,.02);border-radius:50%;filter:blur(150px);pointer-events:none"></div>
+
+    <!-- HEADER BAR -->
+    <header style="height:56px;background:rgba(12,14,16,.6);backdrop-filter:blur(20px);border-bottom:1px solid #141e19;display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex-shrink:0;position:relative;z-index:20">
+      <div style="display:flex;align-items:center;gap:8px">
+        <button id="sbOpen" onclick="tSB()" style="width:36px;height:36px;border-radius:10px;background:rgba(18,21,22,.8);border:1px solid #141e19;align-items:center;justify-content:center;color:#4a5c52;cursor:pointer;display:none"><i class="fa-solid fa-bars text-sm"></i></button>
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+          <span style="color:#3a4a42">Hub</span>
+          <i class="fa-solid fa-chevron-right" style="font-size:6px;color:#1e2e26"></i>
+          <span id="bc" class="text-[#e8ede9] font-medium text-[11px]">Dashboard</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div id="clk" class="mob-hide" style="font-size:10px;color:#3a4a42;font-family:monospace;letter-spacing:1px;width:56px;text-align:center"></div>
+        <button onclick="tN()" style="position:relative;width:36px;height:36px;border-radius:10px;background:rgba(18,21,22,.8);border:1px solid #141e19;display:flex;align-items:center;justify-content:center;color:#3a4a52;cursor:pointer">
+          <i class="fa-solid fa-bell" style="font-size:12px"></i>
+          <span style="position:absolute;top:-4px;right:-4px;width:16px;height:16px;background:#10b981;border-radius:50%;font-size:7px;font-weight:700;color:#060708;display:flex;align-items:center;justify-content:center">3</span>
+        </button>
+        <div id="vcBadge" class="mob-hide" style="display:none;align-items:center;gap:8px;padding:6px 12px;border-radius:10px;background:rgba(6,78,59,.2);border:1px solid rgba(6,78,59,.2)">
+          <span style="position:relative;width:6px;height:6px;display:flex;align-items:center;justify-content:center"><span class="animate-ping" style="position:absolute;width:100%;height:100%;border-radius:50%;background:#34d399;opacity:.75"></span><span style="position:relative;border-radius:50%;width:6px;height:6px;background:#10b981"></span></span>
+          <span class="text-vault-400" style="font-size:10px;font-weight:600;letter-spacing:1px">Vault Connected</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ===== SECTION WRAPPER ===== -->
+    <div id="sw" style="flex:1;overflow:hidden;position:relative">
+
+      <!-- DASHBOARD -->
+      <div id="s-dashboard" class="sp" style="position:absolute;inset:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px">
+        <div style="position:relative;overflow:hidden;border-radius:14px;background:linear-gradient(to right,#121516,#121516,#191c1e);border:1px solid #141e19;padding:20px">
+          <div style="position:absolute;top:0;right:0;width:200px;height:200px;background:rgba(16,185,129,.04);border-radius:50%;filter:blur(80px)"></div>
+          <div style="position:absolute;inset:0;pointer-events:none;overflow:hidden"><div class="scan-line"></div></div>
+          <div style="position:relative;z-index:1">
+            <p class="text-[9px] tracking-[0.2em] text-vault-600 font-bold mb-1">WELCOME BACK</p>
+            <h2 class="font-d font-bold text-xl text-[#e8ede9] mb-1">Somia Khan</h2>
+            <p class="text-[11px] text-[#5a6a62]">Your AI agents are online and securely connected to the Token Vault.</p>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:12px;font-size:11px;color:#3a4a42">
+              <span><i class="fa-solid fa-shield-halved text-vault-700" style="margin-right:4px"></i>0 Threats</span>
+              <span class="mob-hide"><i class="fa-solid fa-clock text-vault-700" style="margin-right:4px"></i>99.97% Uptime</span>
+              <span class="mob-hide"><i class="fa-solid fa-server text-vault-700" style="margin-right:4px"></i>Auth0 Connected</span>
+            </div>
+          </div>
+        </div>
+        <div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:12px;padding:12px;display:flex;align-items:start;gap:12px">
+          <div style="width:32px;height:32px;border-radius:8px;background:rgba(239,68,68,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-triangle-exclamation text-red-400" style="font-size:12px"></i></div>
+          <div style="flex:1;min-width:0"><p class="text-[11px] font-semibold text-red-300">Security Alert</p><p class="text-[10px] text-red-400/70 mt-0.5">847 unauthorized attempts blocked from 203.0.113.0/24</p></div>
+        </div>
+        <div class="mg2" style="display:grid;gap:12px">
+          <div class="mc" style="background:rgba(18,21,22,.6);backdrop-filter:blur(8px);border:1px solid #141e19;border-radius:12px;padding:16px"><div style="position:relative;z-index:1"><div style="margin-bottom:12px"><div style="width:40px;height:40px;border-radius:10px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.1);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-key text-vault-400" style="font-size:14px"></i></div></div><p class="text-2xl font-d font-bold text-[#e8ede9]" style="line-height:1">8</p><p class="text-[10px] text-[#4a5c52] mt-2">Tokens Secured</p></div></div>
+          <div class="mc" style="background:rgba(18,21,22,.6);backdrop-filter:blur(8px);border:1px solid #141e19;border-radius:12px;padding:16px"><div style="position:relative;z-index:1"><div style="margin-bottom:12px"><div style="width:40px;height:40px;border-radius:10px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.1);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-robot text-cyan-400" style="font-size:14px"></i></div></div><p class="text-2xl font-d font-bold text-[#e8ede9]" style="line-height:1">5</p><p class="text-[10px] text-[#4a5c52] mt-2">Active Agents</p></div></div>
+          <div class="mc" style="background:rgba(18,21,22,.6);backdrop-filter:blur(8px);border:1px solid #141e19;border-radius:12px;padding:16px"><div style="position:relative;z-index:1"><div style="margin-bottom:12px"><div style="width:40px;height:40px;border-radius:10px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.1);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-shield-halved text-amb-400" style="font-size:14px"></i></div></div><p class="text-2xl font-d font-bold text-[#e8ede9]" style="line-height:1">96<span class="text-base text-[#4a5c52] font-normal">/100</span></p><p class="text-[10px] text-[#4a5c52] mt-2">Vault Score</p></div></div>
+          <div class="mc" style="background:rgba(18,21,22,.6);backdrop-filter:blur(8px);border:1px solid #141e19;border-radius:12px;padding:16px"><div style="position:relative;z-index:1"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="width:40px;height:40px;border-radius:10px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.1);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-arrow-up-right-dots text-violet-400" style="font-size:14px"></i></div><span style="font-size:8px;color:#10b981;background:rgba(16,185,129,.08);padding:2px 8px;border-radius:999px;font-weight:700">+18.3%</span></div><p class="text-2xl font-d font-bold text-[#e8ede9]" style="line-height:1">12.8<span class="text-base text-[#4a5c52] font-normal">K</span></p><p class="text-[10px] text-[#4a5c52] mt-2">API Calls</p></div></div>
+        </div>
+        <div class="ms" style="display:grid;gap:12px">
+          <div style="background:rgba(18,21,22,.6);border:1px solid #141e19;border-radius:12px;padding:16px"><h3 class="font-d font-semibold text-xs mb-4">Token Usage Over Time</h3><canvas id="c1" height="150"></canvas></div>
+          <div style="background:rgba(18,21,22,.6);border:1px solid #141e19;border-radius:12px;padding:16px"><h3 class="font-d font-semibold text-xs mb-3">Agent Status</h3><div id="asl" style="display:flex;flex-direction:column;gap:6px"></div></div>
+        </div>
+        <div style="background:rgba(18,21,22,.6);border:1px solid #141e19;border-radius:12px;padding:16px"><h3 class="font-d font-semibold text-xs mb-3">Token Health</h3><div id="th" class="mg2" style="display:grid;gap:12px"></div></div>
+        <div style="background:rgba(18,21,22,.6);border:1px solid #141e19;border-radius:12px;padding:16px"><h3 class="font-d font-semibold text-xs mb-3">Recent Vault Activity</h3><div id="af" style="display:flex;flex-direction:column;gap:2px"></div></div>
+        <div style="text-align:center;padding:4px 0"><p class="text-[7px] tracking-[0.3em] text-[#1a2a22]">KOI AI - AUTH0 TOKEN VAULT - SOMIA KHAN</p></div>
+      </div>
+
+      <!-- TOKEN VAULT -->
+      <div id="s-vault" class="sp" style="position:absolute;inset:0;overflow-y:auto;padding:16px;display:none;flex-direction:column;gap:16px">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+          <div style="display:flex;align-items:center;gap:16px">
+            <div style="position:relative;flex-shrink:0">
+              <svg width="76" height="76" viewBox="0 0 120 120" class="transform -rotate-90"><circle cx="60" cy="60" r="52" fill="none" stroke="#191c1e" stroke-width="8"/><circle cx="60" cy="60" r="52" fill="none" stroke="url(#sg)" stroke-width="8" stroke-dasharray="326.73" stroke-dashoffset="13.07" stroke-linecap="round"/><defs><linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#065f46"/><stop offset="50%" stop-color="#10b981"/><stop offset="100%" stop-color="#fbbf24"/></linearGradient></defs></svg>
+              <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center"><span class="text-xl font-d font-bold text-vault-400">96</span><span class="text-[7px] tracking-[0.2em] text-[#3a4a42]">SCORE</span></div>
+            </div>
+            <div>
+              <h2 class="font-d font-bold text-xl text-[#e8ede9]">Auth0 Token Vault</h2>
+              <p class="text-[11px] text-[#4a5c52] mt-1">Secure credential storage with rotation and audit logging</p>
+              <div style="display:flex;gap:6px;margin-top:8px">
+                <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#10b981;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.1);padding:2px 8px;border-radius:8px;font-weight:600"><i class="fa-solid fa-lock" style="font-size:6px"></i>AES-256</span>
+                <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#06b6d4;background:rgba(6,182,212,.08);border:1px solid rgba(6,182,212,.1);padding:2px 8px;border-radius:8px;font-weight:600"><i class="fa-solid fa-rotate" style="font-size:6px"></i>AUTO-ROTATE</span>
+              </div>
+            </div>
+          </div>
+          <button onclick="oATM()" style="display:flex;align-items:center;gap:8px;background:linear-gradient(to right,#059669,#047857);color:white;padding:10px 20px;border-radius:12px;font-size:13px;font-weight:600;border:none;cursor:pointer;box-shadow:0 8px 25px rgba(6,78,59,.4)"><i class="fa-solid fa-plus" style="font-size:10px"></i>Add Token</button>
+        </div>
+        <div id="tg" class="mg1" style="display:grid;gap:12px"></div>
+        <div class="ms" style="display:grid;gap:12px">
+          <div style="background:rgba(18,21,22,.6);border:1px solid #141e19;border-radius:12px;padding:16px"><h3 class="font-d font-semibold text-xs mb-3">Recent Token Access</h3><div id="val" style="max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:2px"></div></div>
+          <div style="background:rgba(18,21,22,.6);border:1px solid #141e19;border-radius:12px;padding:16px"><h3 class="font-d font-semibold text-xs mb-3">Requests per Token</h3><canvas id="c2" height="190"></canvas></div>
+        </div>
+      </div>
+
+      <!-- AI AGENTS -->
+      <div id="s-agents" class="sp" style="position:absolute;inset:0;overflow-y:auto;padding:16px;display:none;flex-direction:column;gap:16px">
+        <h2 class="font-d font-bold text-xl text-[#e8ede9]">AI Agent Fleet</h2>
+        <p class="text-[10px] text-[#4a5c52]">Each agent scoped to specific tokens from Auth0 Token Vault</p>
+        <div id="ag" class="mg1" style="display:grid;gap:16px"></div>
+      </div>
+
+      <!-- CHAT -->
+      <div id="s-chat" class="sp" style="position:absolute;inset:0;display:none">
+        <div style="height:100%;display:flex;flex-direction:column">
+          <div style="height:56px;background:rgba(12,14,16,.6);backdrop-filter:blur(20px);border-bottom:1px solid #141e19;display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex-shrink:0">
+            <select id="cas" onchange="oAC()" style="background:rgba(18,21,22,.8);border:1px solid #141e19;border-radius:10px;padding:8px 32px 8px 12px;font-size:13px;color:#e8ede9;outline:none;font-family:'DM Sans',sans-serif;font-weight:500;max-width:180px;cursor:pointer;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%233a4a42%22 stroke-width=%222%22><polyline points=%226 9 12 15 18 9%22/></svg>');background-repeat:no-repeat;background-position:right 10px center">
+              <option value="research">Research Agent</option>
+              <option value="code">Code Agent</option>
+              <option value="data">Data Agent</option>
+              <option value="comms">Communication Agent</option>
+              <option value="finance">Finance Agent</option>
+            </select>
+            <div id="chatSec" class="mob-hide" style="display:none;align-items:center;gap:6px;font-size:10px;color:#3a4a42;background:rgba(25,28,30,.5);border-radius:8px;padding:6px 10px;border:1px solid #141e19"><i class="fa-solid fa-shield-halved text-vault-700" style="font-size:9px"></i>Vault Secured</div>
+          </div>
+          <div id="cm" style="flex:1;overflow-y:auto;min-height:0;padding:16px;display:flex;flex-direction:column;gap:12px"></div>
+          <div style="padding:12px 16px;background:rgba(12,14,16,.4);backdrop-filter:blur(20px);border-top:1px solid #141e19;flex-shrink:0">
+            <div id="qsRow" class="mob-hide" style="display:none;gap:6px;margin-bottom:8px;overflow-x:auto;padding-bottom:4px">
+              <button onclick="qS('Analyze security vulnerabilities in our repositories')" style="flex-shrink:0;font-size:10px;padding:4px 10px;border-radius:8px;border:1px solid #141e19;color:#4a5c52;background:none;cursor:pointer;white-space:nowrap"><i class="fa-solid fa-bug" style="margin-right:4px"></i>Vulnerabilities</button>
+              <button onclick="qS('Generate financial report for this month')" style="flex-shrink:0;font-size:10px;padding:4px 10px;border-radius:8px;border:1px solid #141e19;color:#4a5c52;background:none;cursor:pointer;white-space:nowrap"><i class="fa-solid fa-chart-pie" style="margin-right:4px"></i>Finance</button>
+              <button onclick="qS('Summarize all Slack conversations')" style="flex-shrink:0;font-size:10px;padding:4px 10px;border-radius:8px;border:1px solid #141e19;color:#4a5c52;background:none;cursor:pointer;white-space:nowrap"><i class="fa-solid fa-message" style="margin-right:4px"></i>Summarize</button>
+              <button onclick="qS('Run ML analysis on latest dataset')" style="flex-shrink:0;font-size:10px;padding:4px 10px;border-radius:8px;border:1px solid #141e19;color:#4a5c52;background:none;cursor:pointer;white-space:nowrap"><i class="fa-solid fa-brain" style="margin-right:4px"></i>ML Pipeline</button>
+              <button onclick="qS('Review my pending pull requests')" style="flex-shrink:0;font-size:10px;padding:4px 10px;border-radius:8px;border:1px solid #141e19;color:#4a5c52;background:none;cursor:pointer;white-space:nowrap"><i class="fa-solid fa-code-branch" style="margin-right:4px"></i>Review PRs</button>
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:10px">
+              <div style="flex:1"><textarea id="ci" rows="1" placeholder="Ask the agent anything..." style="width:100%;background:rgba(18,21,22,.8);border:1px solid #141e19;border-radius:10px;padding:10px 14px;font-size:13px;color:#e8ede9;font-family:'DM Sans',sans-serif;outline:none;resize:none"></textarea></div>
+              <button onclick="sM()" style="width:40px;height:40px;border-radius:10px;background:linear-gradient(to right,#059669,#047857);color:white;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;flex-shrink:0;box-shadow:0 8px 25px rgba(6,78,59,.4)"><i class="fa-solid fa-paper-plane" style="font-size:12px"></i></button>
+            </div>
+            <div id="ti" style="opacity:0;transition:opacity .5s;display:flex;align-items:center;gap:8px;margin-top:8px;overflow:hidden">
+              <span style="font-size:8px;color:#3a4a42;letter-spacing:1px;flex-shrink:0">VAULT:</span>
+              <div id="tb" style="display:flex;gap:6px;overflow-x:auto"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AUDIT LOGS -->
+      <div id="s-logs" class="sp" style="position:absolute;inset:0;overflow-y:auto;padding:16px;display:none;flex-direction:column;gap:12px">
+        <h2 class="font-d font-bold text-xl text-[#e8ede9]">Audit Logs</h2>
+        <p class="text-[10px] text-[#4a5c52]">Complete audit trail of all Token Vault events</p>
+        <div style="background:rgba(18,21,22,.6);border:1px solid #141e19;border-radius:12px;overflow:hidden">
+          <div style="overflow-x:auto">
+            <table style="width:100%;font-size:13px;min-width:700px;border-collapse:collapse">
+              <thead><tr style="border-bottom:1px solid #141e19;font-size:9px;letter-spacing:.15em;color:#3a4a42;text-transform:uppercase"><th style="text-align:left;padding:12px 16px;font-weight:700">Time</th><th style="text-align:left;padding:12px 16px;font-weight:700">Event</th><th style="text-align:left;padding:12px 16px;font-weight:700">Agent</th><th style="text-align:left;padding:12px 16px;font-weight:700">Token</th><th style="text-align:left;padding:12px 16px;font-weight:700">Status</th><th style="text-align:left;padding:12px 16px;font-weight:700">Details</th></tr></thead>
+              <tbody id="ltb"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- THREAT MONITOR -->
+      <div id="s-threats" class="sp" style="position:absolute;inset:0;overflow-y:auto;padding:16px;display:none;flex-direction:column;gap:12px">
+        <h2 class="font-d font-bold text-xl text-[#e8ede9]">Threat Monitor</h2>
+        <p class="text-[10px] text-[#4a5c52]">Real-time threat detection via Token Vault analytics</p>
+        <div class="mg2" style="display:grid;gap:12px">
+          <div style="background:rgba(18,21,22,.6);border:1px solid rgba(239,68,68,.1);border-radius:12px;padding:16px"><p style="color:#3a4a42;letter-spacing:1px;font-weight:700;margin-bottom:8px;font-size:9px">BLOCKED TODAY</p><p class="text-2xl font-d font-bold text-red-400">847</p></div>
+          <div style="background:rgba(18,21,22,.6);border:1px solid rgba(245,158,11,.1);border-radius:12px;padding:16px"><p style="color:#3a4a42;letter-spacing:1px;font-weight:700;margin-bottom:8px;font-size:9px">SUSPICIOUS IPs</p><p class="text-2xl font-d font-bold text-amb-400">23</p></div>
+          <div style="background:rgba(18,21,22,.6);border:1px solid rgba(16,185,129,.1);border-radius:12px;padding:16px"><p style="color:#3a4a42;letter-spacing:1px;font-weight:700;margin-bottom:8px;font-size:9px">TOKENS SAFE</p><p class="text-2xl font-d font-bold text-vault-400">8/8</p></div>
+          <div style="background:rgba(18,21,22,.6);border:1px solid rgba(34,211,238,.1);border-radius:12px;padding:16px"><p style="color:#3a4a42;letter-spacing:1px;font-weight:700;margin-bottom:8px;font-size:9px">RESPONSE</p><p class="text-2xl font-d font-bold text-cyan-400">12ms</p></div>
+        </div>
+        <div style="background:rgba(18,21,22,.6);border:1px solid #141e19;border-radius:12px;padding:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h3 class="font-d font-semibold text-xs">Live Threat Feed</h3><span style="display:flex;align-items:center;gap:6px;font-size:9px;color:#ef4444;font-weight:600"><span style="width:6px;height:6px;border-radius:50%;background:#ef4444;animation:prA 2s ease-out infinite"></span>Real-time</span></div>
+          <div id="tf" style="display:flex;flex-direction:column;gap:6px"></div>
+        </div>
+      </div>
+
+    </div><!-- end sw -->
+  </div><!-- end main content -->
+</div><!-- end app -->
+
+<script>
+/* =========================================================
+   DATA
+   ========================================================= */
+var TK = [
+  {id:'openai',n:'OpenAI',i:'fa-brands fa-openai',c:'#10a37f',t:'OAuth 2.0',s:'active',m:'sk-proj-****3f8a',lu:'2m',r:4821,ar:true,h:98},
+  {id:'anthropic',n:'Anthropic Claude',i:'fa-solid fa-brain',c:'#d4a574',t:'API Key',s:'active',m:'sk-ant-****7b2e',lu:'5m',r:2134,ar:false,h:95},
+  {id:'github',n:'GitHub',i:'fa-brands fa-github',c:'#e8ede9',t:'OAuth 2.0',s:'active',m:'ghp_****9c4d',lu:'8m',r:1892,ar:true,h:100},
+  {id:'slack',n:'Slack',i:'fa-brands fa-slack',c:'#e01e5a',t:'OAuth 2.0',s:'active',m:'xoxb-****1e7f',lu:'12m',r:967,ar:true,h:92},
+  {id:'gcloud',n:'Google Cloud',i:'fa-brands fa-google',c:'#4285f4',t:'Service Account',s:'rotating',m:'sa-****5a2c',lu:'15m',r:1456,ar:true,h:78},
+  {id:'stripe',n:'Stripe',i:'fa-brands fa-stripe-s',c:'#635bff',t:'API Key',s:'active',m:'sk_live_****8d3b',lu:'23m',r:634,ar:false,h:100},
+  {id:'notion',n:'Notion',i:'fa-solid fa-n',c:'#e8ede9',t:'OAuth 2.0',s:'active',m:'ntn_****4f6a',lu:'31m',r:423,ar:true,h:97},
+  {id:'aws',n:'AWS',i:'fa-brands fa-aws',c:'#ff9900',t:'IAM Key',s:'expiring',m:'AKIA****2e8d',lu:'45m',r:519,ar:true,h:45}
+];
+
+var AG = [
+  {id:'research',n:'Research Agent',i:'fa-solid fa-microscope',c:'#10b981',d:'Deep web research, GitHub repo analysis, documentation generation.',tk:['openai','github','notion'],caps:['Web Research','Repo Analysis','Doc Gen','Citations'],tkc:147,la:'2m'},
+  {id:'code',n:'Code Agent',i:'fa-solid fa-code',c:'#22d3ee',d:'Code generation, review, debugging, PR creation via GitHub.',tk:['openai','anthropic','github'],caps:['Code Gen','Review','PRs','CI/CD'],tkc:312,la:'5m'},
+  {id:'data',n:'Data Agent',i:'fa-solid fa-chart-line',c:'#f59e0b',d:'Dataset processing, ML pipelines, visualizations.',tk:['openai','gcloud','aws'],caps:['Analysis','ML Pipelines','Viz','Reports'],tkc:89,la:'15m'},
+  {id:'comms',n:'Communication Agent',i:'fa-solid fa-tower-broadcast',c:'#e01e5a',d:'Summarizes conversations, syncs Slack and Notion.',tk:['openai','slack','notion'],caps:['Summary','Channels','Notifications','Sync'],tkc:234,la:'12m'},
+  {id:'finance',n:'Finance Agent',i:'fa-solid fa-coins',c:'#635bff',d:'Payment monitoring, financial reports, anomaly alerts.',tk:['openai','stripe'],caps:['Payments','Reports','Subscriptions','Alerts'],tkc:56,la:'23m'}
+];
+
+var CR = {
+  research:[
+    {t:"Analyzed latest commits via **GitHub OAuth** from Vault:\n\n1. **Memory leak** in auth/middleware.js line 142\n2. **Race condition** in api/tokens.js\n3. **Deprecation** - legacy crypto in vault/encrypt.js\n\nCreated issues on GitHub, updated Notion doc.",tu:['github','openai','notion']},
+    {t:"OAuth 2.0 rotation research:\n- **Sliding window rotation** = 73% less interruption\n- **Dual-token pattern** - industry standard\n- Auth0 Vault implements all OWASP recommendations\n- Avg rotation: 340ms\n12 citations synced to Notion.",tu:['openai','notion']},
+    {t:"Scanned 47 GitHub repos:\n- **23** have .env vault integration\n- **15** use hardcoded tokens (critical!)\n- **9** use deprecated auth flows\n\nMigration priority list pushed to Notion.",tu:['github','openai','notion']}
+  ],
+  code:[
+    {t:"Reviewed PR #247 via **Anthropic** + **GitHub**:\n\n**Security:** IV length validated properly.\n**Performance:** Caching reduces vault lookups ~60%.\n**Issue:** Missing error boundary in rotateToken().\n\nAdded review comment with fix suggestion.",tu:['anthropic','github']},
+    {t:"Created middleware intercepting outbound API calls:\n1. Checks Token Vault for credentials\n2. Auto-injects Bearer headers\n3. Handles 401 with refresh retry\n4. Logs to audit trail\n\nOpened PR #251 via **GitHub**.",tu:['openai','github']},
+    {t:"Debugged token refresh failure:\n**Root cause:** Non-atomic check-and-set in vault/refresh.js.\n**Fix:** Distributed lock via Redis.\n500 concurrent reqs - 0 failures.\nPushed fix via GitHub PR #253.",tu:['openai','github']}
+  ],
+  data:[
+    {t:"Pipeline on **Google Cloud**:\n- 2.4M token access logs processed\n- Peak: 14:00-16:00 UTC\n- **847 unauthorized attempts** blocked\n- 12 visualizations to **AWS S3**\n- ML fraud accuracy: **97.3%**",tu:['gcloud','aws','openai']},
+    {t:"Sentiment analysis via **Google Cloud ML**:\n- Positive: 78% | Neutral: 18% | Negative: 4%\n- Top request: Code review (34%)\n- Cache embeddings to cut OpenAI calls 40%\nReport saved to S3.",tu:['openai','gcloud']},
+    {t:"ML pipeline: 500K events, XGBoost classifier.\nAccuracy: 97.3% | Precision: 96.8%\nTop features: IP (32%), time-of-day (18%)\nModel exported to S3.",tu:['gcloud','aws','openai']}
+  ],
+  comms:[
+    {t:"Summarized 47 Slack messages from 8 channels:\n**#engineering:** Vault v2.3.1 deployed\n**#security:** Auth0 audit passed\n**#product:** 3 new agent requests\nPosted to #team-digest, synced to **Notion**.",tu:['slack','openai','notion']},
+    {t:"Channel cleanup via **Slack**:\n- Archived 12 inactive channels\n- Updated 5 descriptions with Vault guidelines\n- Security reminder posted in #announcements\nUpdated **Notion** wiki.",tu:['slack','notion']},
+    {t:"Cross-platform sync **Slack** to **Notion**:\n- 23 Notion pages from Slack summaries\n- 8 action items extracted\n- 156 messages summarized via OpenAI\nReal-time sync via webhook.",tu:['slack','openai','notion']}
+  ],
+  finance:[
+    {t:"30-day analysis via **Stripe**:\n- **Spend:** $847.32 (+18.3%)\n- OpenAI: $612 | Anthropic: $135\n- **Revenue:** $24,500 (312 subs)\n- **Churn:** 2.1% (down from 3.4%)\n- Duplicate charge - auto-refund issued",tu:['stripe','openai']},
+    {t:"Subscription metrics via **Stripe**:\n- Active: 312 (+14 this month)\n- MRR: $24,500 (+$1,120)\n- Vault = 23% higher retention\n- 8 renewals worth $3,200",tu:['stripe','openai']},
+    {t:"Anomaly detection via **Stripe** + **OpenAI**:\n4,231 transactions scanned. 3 anomalies:\n1. Duplicate $49.99 (auto-refunded)\n2. Free to Enterprise (verified legit)\n3. Chargeback risk 0.87 (flagged)\nRecommend: Pre-auth for Enterprise upgrades.",tu:['stripe','openai']}
+  ]
+};
+
+var ACTDATA = [
+  {ic:'fa-solid fa-arrow-right-to-bracket',co:'#10b981',tx:'Research Agent accessed OpenAI token from Vault',tm:'2m'},
+  {ic:'fa-solid fa-rotate',co:'#f59e0b',tx:'Auto-rotation completed for Google Cloud SA',tm:'15m'},
+  {ic:'fa-solid fa-code-branch',co:'#22d3ee',tx:'Code Agent created PR #251 via GitHub token',tm:'23m'},
+  {ic:'fa-solid fa-shield-halved',co:'#ef4444',tx:'Blocked unauthorized access from 203.0.113.42',tm:'31m'},
+  {ic:'fa-solid fa-comments',co:'#e01e5a',tx:'Comms Agent posted summary via Slack token',tm:'45m'},
+  {ic:'fa-solid fa-plus',co:'#10b981',tx:'New token: AWS IAM (auto-rotation)',tm:'1h'},
+  {ic:'fa-solid fa-chart-pie',co:'#f59e0b',tx:'Data Agent processed 2.4M logs via GCloud',tm:'2h'},
+  {ic:'fa-solid fa-coins',co:'#635bff',tx:'Finance Agent queried Stripe analytics',tm:'3h'}
+];
+
+var LOGDATA = [
+  {tm:'14:32',ev:'Token Access',ag:'Research',tk:'OpenAI',st:'success',dt:'chat.completions - 847 tokens'},
+  {tm:'14:30',ev:'Rotation',ag:'System',tk:'GCloud',st:'success',dt:'SA key rotated'},
+  {tm:'14:28',ev:'Action',ag:'Code',tk:'GitHub',st:'success',dt:'PR #251 created'},
+  {tm:'14:25',ev:'Alert',ag:'System',tk:'OpenAI',st:'blocked',dt:'Blocked 203.0.113.42'},
+  {tm:'14:22',ev:'Token Access',ag:'Comms',tk:'Slack',st:'success',dt:'Posted to #team-digest'},
+  {tm:'14:20',ev:'Token Access',ag:'Comms',tk:'Notion',st:'success',dt:'Weekly doc synced'},
+  {tm:'14:15',ev:'Token Access',ag:'Data',tk:'GCloud',st:'success',dt:'50K records predicted'},
+  {tm:'14:10',ev:'Token Access',ag:'Data',tk:'AWS',st:'success',dt:'Report uploaded to S3'},
+  {tm:'14:05',ev:'Action',ag:'Finance',tk:'Stripe',st:'success',dt:'312 subscriptions'},
+  {tm:'13:58',ev:'Token Access',ag:'Research',tk:'GitHub',st:'success',dt:'23 files analyzed'},
+  {tm:'13:52',ev:'Rotation',ag:'System',tk:'AWS',st:'warning',dt:'Expires in 7 days'},
+  {tm:'13:45',ev:'Token Access',ag:'Code',tk:'Anthropic',st:'success',dt:'Code review 1.2K tokens'},
+  {tm:'13:40',ev:'Alert',ag:'System',tk:'Stripe',st:'success',dt:'Auto-refund $49.99'},
+  {tm:'13:35',ev:'Token Access',ag:'Research',tk:'Notion',st:'success',dt:'47 entries queried'},
+  {tm:'13:28',ev:'Action',ag:'Code',tk:'GitHub',st:'success',dt:'3 issues filed'}
+];
+
+var THREATDATA = [
+  {ip:'203.0.113.42',tp:'Brute Force',tk:'OpenAI',tm:'14:25',sv:'high',dt:'347 failed auth in 5 min'},
+  {ip:'198.51.100.17',tp:'Token Replay',tk:'GitHub',tm:'14:18',sv:'high',dt:'Expired OAuth replay'},
+  {ip:'192.0.2.89',tp:'Rate Limit',tk:'Anthropic',tm:'14:12',sv:'medium',dt:'100 req/min exceeded'},
+  {ip:'203.0.113.78',tp:'Anomaly',tk:'Stripe',tm:'14:08',sv:'medium',dt:'Unusual pattern'},
+  {ip:'198.51.100.55',tp:'Brute Force',tk:'AWS',tm:'13:55',sv:'high',dt:'IAM assume-role failed'},
+  {ip:'192.0.2.201',tp:'Recon',tk:'Slack',tm:'13:48',sv:'low',dt:'Channel enumeration'},
+  {ip:'203.0.113.15',tp:'Rate Limit',tk:'GCloud',tm:'13:42',sv:'medium',dt:'Storage quota'},
+  {ip:'198.51.100.92',tp:'Anomaly',tk:'Notion',tm:'13:35',sv:'low',dt:'New geo-location'}
+];
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
+function ftk(id) {
+  for (var i = 0; i < TK.length; i++) {
+    if (TK[i].id === id) return TK[i];
+  }
+  return null;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* =========================================================
+   LOADER - uses window.onload for reliability
+   ========================================================= */
+var loaderDone = false;
+
+function finishLoader() {
+  if (loaderDone) return;
+  loaderDone = true;
+  var ld = document.getElementById('loader');
+  var ap = document.getElementById('app');
+  /* Fade out loader */
+  ld.style.opacity = '0';
+  setTimeout(function() {
+    ld.style.display = 'none';
+    /* Show app */
+    ap.style.display = 'flex';
+    /* Force reflow then fade in */
+    ap.offsetHeight;
+    ap.style.opacity = '1';
+    /* Init everything */
+    initAll();
+  }, 800);
+}
+
+/* Start progress bar immediately */
+setTimeout(function() {
+  var bar = document.getElementById('lb');
+  if (bar) bar.style.width = '100%';
+}, 200);
+
+/* Step text */
+var loadSteps = ['CONNECTING TO AUTH0...','LOADING TOKEN VAULT...','INITIALIZING AGENTS...','READY'];
+var stepIdx = 0;
+var stepTimer = setInterval(function() {
+  stepIdx++;
+  var ls = document.getElementById('ls');
+  if (ls && stepIdx < loadSteps.length) ls.textContent = loadSteps[stepIdx];
+  if (stepIdx >= loadSteps.length) clearInterval(stepTimer);
+}, 500);
+
+/* PRIMARY: wait for full page load */
+window.onload = function() {
+  setTimeout(finishLoader, 1500);
+};
+
+/* FALLBACK: if window.onload doesn't fire within 6s */
+setTimeout(function() {
+  finishLoader();
+}, 6000);
+
+/* =========================================================
+   INIT ALL
+   ========================================================= */
+function initAll() {
+  try { initParticles(); } catch(e) { console.log('Particles error:', e); }
+  try { initClock(); } catch(e) { console.log('Clock error:', e); }
+  try { initResponsive(); } catch(e) { console.log('Responsive error:', e); }
+  try { renderAll(); } catch(e) { console.log('Render error:', e); }
+  try { initCharts(); } catch(e) { console.log('Chart error:', e); }
+  try { initChat(); } catch(e) { console.log('Chat error:', e); }
+}
+
+/* =========================================================
+   PARTICLES
+   ========================================================= */
+function initParticles() {
+  var cv = document.getElementById('ptc');
+  if (!cv) return;
+  var cx = cv.getContext('2d');
+  var pts = [];
+  function rs() { cv.width = window.innerWidth; cv.height = window.innerHeight; }
+  window.addEventListener('resize', rs);
+  rs();
+  for (var i = 0; i < 25; i++) {
+    pts.push({ x: Math.random()*cv.width, y: Math.random()*cv.height, vx: (Math.random()-.5)*.15, vy: (Math.random()-.5)*.15, s: Math.random()+.5, o: Math.random()*.15+.03 });
+  }
+  function dr() {
+    cx.clearRect(0, 0, cv.width, cv.height);
+    for (var i = 0; i < pts.length; i++) {
+      var p = pts[i];
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0) p.x = cv.width; if (p.x > cv.width) p.x = 0;
+      if (p.y < 0) p.y = cv.height; if (p.y > cv.height) p.y = 0;
+      cx.beginPath();
+      cx.arc(p.x, p.y, Math.max(0.5, p.s), 0, Math.PI * 2);
+      cx.fillStyle = 'rgba(16,185,129,' + p.o + ')';
+      cx.fill();
+    }
+    requestAnimationFrame(dr);
+  }
+  dr();
+  /* Mouse glow */
+  document.addEventListener('mousemove', function(e) {
+    var g = document.getElementById('mg');
+    if (g) { g.style.left = e.clientX + 'px'; g.style.top = e.clientY + 'px'; }
+  });
+}
+
+/* =========================================================
+   CLOCK
+   ========================================================= */
+function initClock() {
+  var el = document.getElementById('clk');
+  if (!el) return;
+  function tick() {
+    el.textContent = new Date().toTimeString().slice(0, 8);
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+function initResponsive() {
+  function check() {
+    var w = window.innerWidth;
+    var sbO = document.getElementById('sbOpen');
+    var sbC = document.getElementById('sbClose');
+    var vcB = document.getElementById('vcBadge');
+    var chS = document.getElementById('chatSec');
+    var qsR = document.getElementById('qsRow');
+    if (w <= 1024) {
+      if (sbO) sbO.style.display = 'flex';
+      if (sbC) sbC.style.display = 'flex';
+    } else {
+      if (sbO) sbO.style.display = 'none';
+      if (sbC) sbC.style.display = 'none';
+      document.getElementById('sbar').classList.remove('open');
+      document.getElementById('sov').classList.remove('show');
+    }
+    if (w > 640) {
+      if (vcB) vcB.style.display = 'flex';
+      if (chS) chS.style.display = 'flex';
+      if (qsR) qsR.style.display = 'flex';
+    } else {
+      if (vcB) vcB.style.display = 'none';
+      if (chS) chS.style.display = 'none';
+      if (qsR) qsR.style.display = 'none';
+    }
+  }
+  window.addEventListener('resize', check);
+  check();
+}
+
+/* =========================================================
+   SIDEBAR TOGGLE
+   ========================================================= */
+function tSB() {
+  document.getElementById('sbar').classList.toggle('open');
+  document.getElementById('sov').classList.toggle('show');
+}
+
+/* =========================================================
+   NOTIFICATIONS
+   ========================================================= */
+function tN() {
+  var d = document.getElementById('nd');
+  d.style.display = (d.style.display === 'none') ? 'block' : 'none';
+}
+document.addEventListener('click', function(e) {
+  var d = document.getElementById('nd');
+  if (d && d.style.display === 'block' && !d.contains(e.target) && !e.target.closest('[onclick*="tN"]')) {
+    d.style.display = 'none';
+  }
+});
+
+/* =========================================================
+   NAVIGATION
+   ========================================================= */
+var SNAMES = { dashboard:'Dashboard', vault:'Token Vault', agents:'AI Agents', chat:'Agent Chat', logs:'Audit Logs', threats:'Threat Monitor' };
+
+function go(name) {
+  var all = document.querySelectorAll('.sp');
+  for (var i = 0; i < all.length; i++) all[i].style.display = 'none';
+  var t = document.getElementById('s-' + name);
+  if (t) {
+    t.style.display = 'flex';
+    t.classList.remove('fade-in');
+    void t.offsetWidth;
+    t.classList.add('fade-in');
+  }
+  var bs = document.querySelectorAll('.nav-btn');
+  for (var i = 0; i < bs.length; i++) bs[i].classList.remove('active');
+  var nb = document.querySelector('[data-n="' + name + '"]');
+  if (nb) nb.classList.add('active');
+  document.getElementById('bc').textContent = SNAMES[name] || name;
+  /* Re-show chat UI elements when entering chat */
+  if (name === 'chat') {
+    initResponsive();
+  }
+}
+
+/* =========================================================
+   TOAST
+   ========================================================= */
+function shoT(msg) {
+  var b = document.getElementById('toast-box');
+  var el = document.createElement('div');
+  el.style.cssText = 'pointer-events:auto;display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;border:1px solid rgba(16,185,129,.3);background:rgba(6,78,59,.5);backdrop-filter:blur(20px);box-shadow:0 8px 30px rgba(0,0,0,.5);font-size:12px;animation:fadeUp .3s ease forwards';
+  el.innerHTML = '<i class="fa-solid fa-check-circle text-vault-400"></i><span style="color:#b0bab3">' + esc(msg) + '</span>';
+  b.appendChild(el);
+  setTimeout(function() { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(function() { el.remove(); }, 300); }, 4000);
+}
+
+/* =========================================================
+   MODAL
+   ========================================================= */
+function oM(html) {
+  var o = document.getElementById('mo');
+  var c = document.getElementById('mc');
+  c.innerHTML = html;
+  o.style.display = 'flex';
+  requestAnimationFrame(function() { c.style.transform = 'scale(1)'; c.style.opacity = '1'; });
+}
+function clM() {
+  var c = document.getElementById('mc');
+  c.style.transform = 'scale(.9)';
+  c.style.opacity = '0';
+  setTimeout(function() { document.getElementById('mo').style.display = 'none'; }, 300);
+}
+
+/* =========================================================
+   ADD TOKEN MODAL
+   ========================================================= */
+function oATM() {
+  var h = '<div style="padding:20px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">';
+  h += '<div><h3 class="font-d font-bold text-lg">Add Token to Vault</h3><p style="font-size:10px;color:#3a4a42;margin-top:2px">Securely store in Auth0 Token Vault</p></div>';
+  h += '<button onclick="clM()" style="width:32px;height:32px;border-radius:8px;background:#191c1e;display:flex;align-items:center;justify-content:center;color:#3a4a42;border:none;cursor:pointer"><i class="fa-solid fa-xmark text-sm"></i></button>';
+  h += '</div>';
+  h += '<div style="display:flex;flex-direction:column;gap:14px">';
+  h += '<div><label style="font-size:9px;color:#4a5c52;margin-bottom:6px;display:block;font-weight:600;letter-spacing:1px">SERVICE</label>';
+  h += '<select style="width:100%;background:#191c1e;border:1px solid #141e19;border-radius:10px;padding:10px;font-size:13px;color:#e8ede9;outline:none"><option>OpenAI</option><option>Anthropic</option><option>GitHub</option><option>Google Cloud</option><option>AWS</option><option>Slack</option><option>Stripe</option><option>Notion</option></select></div>';
+  h += '<div><label style="font-size:9px;color:#4a5c52;margin-bottom:6px;display:block;font-weight:600;letter-spacing:1px">TOKEN</label>';
+  h += '<input type="password" placeholder="sk-..." style="width:100%;background:#191c1e;border:1px solid #141e19;border-radius:10px;padding:10px;font-size:13px;color:#e8ede9;font-family:monospace;outline:none"></div>';
+  h += '<div><label style="font-size:9px;color:#4a5c52;margin-bottom:6px;display:block;font-weight:600;letter-spacing:1px">AUTH0 CONNECTION</label>';
+  h += '<select style="width:100%;background:#191c1e;border:1px solid #141e19;border-radius:10px;padding:10px;font-size:13px;color:#e8ede9;outline:none"><option>Manual Entry (encrypted at rest)</option><option>OAuth 2.0 Authorization Code</option><option>Client Credentials Flow</option><option>OIDC Token Exchange</option></select></div>';
+  h += '<div style="display:flex;gap:10px;margin-top:4px">';
+  h += '<button onclick="clM();shoT(\'Token stored in Auth0 Vault\')" style="flex:1;padding:10px;border-radius:10px;border:none;background:linear-gradient(to right,#059669,#047857);color:white;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 8px 25px rgba(6,78,59,.4)">Secure and Store</button>';
+  h += '<button onclick="clM()" style="flex:1;padding:10px;border-radius:10px;border:1px solid #141e19;font-size:13px;color:#4a5c52;background:none;cursor:pointer">Cancel</button>';
+  h += '</div></div></div>';
+  oM(h);
+}
+
+/* =========================================================
+   TOKEN DETAIL MODAL
+   ========================================================= */
+function oTD(id) {
+  var t = ftk(id);
+  if (!t) return;
+  var hc = t.h >= 90 ? '#10b981' : t.h >= 60 ? '#f59e0b' : '#ef4444';
+  var sColor = '#10b981', sBg = 'rgba(16,185,129,.1)', sLabel = 'Active';
+  if (t.s === 'rotating') { sColor = '#f59e0b'; sBg = 'rgba(245,158,11,.1)'; sLabel = 'Rotating'; }
+  if (t.s === 'expiring') { sColor = '#ef4444'; sBg = 'rgba(239,68,68,.1)'; sLabel = 'Expiring'; }
+
+  var h = '<div style="padding:20px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">';
+  h += '<div style="display:flex;align-items:center;gap:12px">';
+  h += '<div style="width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:20px;background:' + t.c + '0d;color:' + t.c + '"><i class="' + t.i + '"></i></div>';
+  h += '<div><h3 class="font-d font-bold text-xl">' + esc(t.n) + '</h3><p style="font-size:10px;color:#4a5c52">' + esc(t.t) + '</p></div>';
+  h += '</div>';
+  h += '<button onclick="clM()" style="width:32px;height:32px;border-radius:8px;background:#191c1e;display:flex;align-items:center;justify-content:center;color:#3a4a42;border:none;cursor:pointer"><i class="fa-solid fa-xmark text-sm"></i></button>';
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">';
+  h += '<div style="background:rgba(25,28,30,.5);border-radius:10px;padding:14px;border:1px solid #141e19"><p style="font-size:8px;color:#3a4a42;letter-spacing:1px;margin-bottom:4px;font-weight:700">STATUS</p><span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;color:' + sColor + ';background:' + sBg + '">' + sLabel + '</span></div>';
+  h += '<div style="background:rgba(25,28,30,.5);border-radius:10px;padding:14px;border:1px solid #141e19"><p style="font-size:8px;color:#3a4a42;letter-spacing:1px;margin-bottom:4px;font-weight:700">HEALTH</p><p style="font-size:20px;font-weight:700;color:' + hc + '">' + t.h + '%</p></div>';
+  h += '<div style="background:rgba(25,28,30,.5);border-radius:10px;padding:14px;border:1px solid #141e19"><p style="font-size:8px;color:#3a4a42;letter-spacing:1px;margin-bottom:4px;font-weight:700">MASKED TOKEN</p><p style="font-size:10px;font-family:monospace;color:#4a5c52">' + esc(t.m) + '</p></div>';
+  h += '<div style="background:rgba(6,78,59,.1);border:1px solid rgba(6,78,59,.1);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:8px;font-size:10px;color:#10b981"><i class="fa-solid fa-lock" style="font-size:9px"></i>AES-256-GCM via Auth0</div>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:10px">';
+  h += '<button onclick="clM();rotateToken(\'' + t.id + '\')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(245,158,11,.2);color:#f59e0b;font-size:12px;font-weight:600;background:none;cursor:pointer"><i class="fa-solid fa-rotate" style="margin-right:4px"></i>Rotate</button>';
+  h += '<button onclick="clM();shoT(\'Token revoked\')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(239,68,68,.2);color:#ef4444;font-size:12px;font-weight:600;background:none;cursor:pointer"><i class="fa-solid fa-ban" style="margin-right:4px"></i>Revoke</button>';
+  h += '</div></div>';
+  oM(h);
+}
+
+/* =========================================================
+   ROTATE TOKEN
+   ========================================================= */
+function rotateToken(id) {
+  var t = ftk(id);
+  if (!t) return;
+  t.s = 'rotating';
+  renderTokenGrid();
+  shoT('Rotating ' + t.n + '...');
+  setTimeout(function() {
+    t.s = 'active';
+    renderTokenGrid();
+    shoT(t.n + ' rotated successfully');
+  }, 3000);
+}
+
+/* =========================================================
+   AGENT CONTEXT MODAL (on chat agent select change)
+   ========================================================= */
+function oAC() {
+  var aid = document.getElementById('cas').value;
+  var a = null;
+  for (var i = 0; i < AG.length; i++) { if (AG[i].id === aid) { a = AG[i]; break; } }
+  if (!a) return;
+
+  var tkHTML = '';
+  for (var j = 0; j < a.tk.length; j++) {
+    var t = ftk(a.tk[j]);
+    if (!t) continue;
+    tkHTML += '<div style="display:flex;align-items:center;gap:6px;padding:8px;background:rgba(25,28,30,.5);border:1px solid #141e19;border-radius:8px">';
+    tkHTML += '<i class="' + t.i + '" style="color:' + t.c + ';font-size:10px"></i>';
+    tkHTML += '<span style="font-size:11px;color:#8a9a90">' + esc(t.n) + '</span>';
+    tkHTML += '<span style="margin-left:auto;font-size:8px;color:#2e3e35">' + esc(t.t) + '</span></div>';
+  }
+
+  var h = '<div style="padding:20px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">';
+  h += '<div style="display:flex;align-items:center;gap:12px">';
+  h += '<div style="width:40px;height:40px;border-radius:12px;background:' + a.c + '0d;color:' + a.c + ';display:flex;align-items:center;justify-content:center"><i class="' + a.i + '"></i></div>';
+  h += '<div><h3 class="font-d font-bold text-lg">' + esc(a.n) + '</h3><p style="font-size:10px;color:#3a4a42">' + esc(a.d) + '</p></div>';
+  h += '</div>';
+  h += '<button onclick="clM()" style="width:32px;height:32px;border-radius:8px;background:#191c1e;display:flex;align-items:center;justify-content:center;color:#3a4a42;border:none;cursor:pointer"><i class="fa-solid fa-xmark text-sm"></i></button>';
+  h += '</div>';
+  h += '<p style="font-size:8px;color:#3a4a42;letter-spacing:1px;font-weight:700;margin-bottom:8px">VAULT TOKENS IN USE</p>';
+  h += '<div style="display:flex;flex-direction:column;gap:6px">' + tkHTML + '</div>';
+  h += '</div>';
+  oM(h);
+}
+
+/* =========================================================
+   RENDER FUNCTIONS
+   ========================================================= */
+function renderAll() {
+  renderAgentStatus();
+  renderActivityFeed();
+  renderTokenHealth();
+  renderTokenGrid();
+  renderVaultAccessLog();
+  renderAgentCards();
+  renderLogTable();
+  renderThreatFeed();
+}
+
+function renderAgentStatus() {
+  var el = document.getElementById('asl');
+  if (!el) return;
+  var h = '';
+  for (var i = 0; i < AG.length; i++) {
+    var a = AG[i];
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;cursor:pointer" onmouseover="this.style.background=\'rgba(25,28,30,.4)\'" onmouseout="this.style.background=\'\'" onclick="go(\'chat\');document.getElementById(\'cas\').value=\'' + a.id + '\'">';
+    h += '<div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;background:' + a.c + '0d;color:' + a.c + '"><i class="' + a.i + '"></i></div>';
+    h += '<div style="flex:1;min-width:0"><p style="font-size:11px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(a.n) + '</p><p style="font-size:9px;color:#2e3e35">' + esc(a.la) + '</p></div>';
+    h += '<span style="width:6px;height:6px;border-radius:50%;background:#10b981"></span></div>';
+  }
+  el.innerHTML = h;
+}
+
+function renderActivityFeed() {
+  var el = document.getElementById('af');
+  if (!el) return;
+  var h = '';
+  for (var i = 0; i < ACTDATA.length; i++) {
+    var a = ACTDATA[i];
+    h += '<div style="display:flex;align-items:start;gap:10px;padding:8px;border-radius:10px" onmouseover="this.style.background=\'rgba(25,28,30,.3)\'" onmouseout="this.style.background=\'\'">';
+    h += '<div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:' + a.co + '0a"><i class="' + a.ic + '" style="font-size:9px;color:' + a.co + '"></i></div>';
+    h += '<div style="flex:1;min-width:0"><p style="font-size:10px;color:#8a9a90">' + esc(a.tx) + '</p></div>';
+    h += '<span style="font-size:9px;color:#2e3e35;flex-shrink:0;margin-top:2px">' + esc(a.tm) + '</span></div>';
+  }
+  el.innerHTML = h;
+}
+
+function renderTokenHealth() {
+  var el = document.getElementById('th');
+  if (!el) return;
+  var h = '';
+  for (var i = 0; i < 4; i++) {
+    var t = TK[i];
+    var hc = t.h >= 90 ? '#10b981' : t.h >= 60 ? '#f59e0b' : '#ef4444';
+    var label = t.h >= 90 ? 'Healthy' : t.h >= 60 ? 'Warning' : 'Critical';
+    h += '<div style="background:rgba(25,28,30,.3);border:1px solid #141e19;border-radius:10px;padding:12px">';
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><i class="' + t.i + '" style="font-size:10px;color:' + t.c + '"></i><span style="font-size:10px;font-weight:500">' + esc(t.n) + '</span></div>';
+    h += '<div class="hp"><div class="hpf" style="width:' + t.h + '%;background:' + hc + '"></div></div>';
+    h += '<div style="display:flex;justify-content:space-between;margin-top:6px"><span style="font-size:9px;color:#3a4a42">' + t.h + '%</span><span style="font-size:9px;color:' + hc + '">' + label + '</span></div></div>';
+  }
+  el.innerHTML = h;
+}
+
+function renderTokenGrid() {
+  var el = document.getElementById('tg');
+  if (!el) return;
+  var sMap = { active:{l:'Active',c:'#10b981',bg:'rgba(16,185,129,.1)'}, rotating:{l:'Rotating',c:'#f59e0b',bg:'rgba(245,158,11,.1)'}, expiring:{l:'Expiring',c:'#ef4444',bg:'rgba(239,68,68,.1)'} };
+  var h = '';
+  for (var i = 0; i < TK.length; i++) {
+    var t = TK[i];
+    var s = sMap[t.s] || sMap.active;
+    var hc = t.h >= 90 ? '#10b981' : t.h >= 60 ? '#f59e0b' : '#ef4444';
+    h += '<div class="tc" style="cursor:pointer" onclick="oTD(\'' + t.id + '\')">';
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+    h += '<div style="display:flex;align-items:center;gap:10px">';
+    h += '<div style="width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;background:' + t.c + '0d;color:' + t.c + '"><i class="' + t.i + '"></i></div>';
+    h += '<div><p style="font-size:12px;font-weight:600">' + esc(t.n) + '</p><p style="font-size:9px;color:#3a4a42">' + esc(t.t) + '</p></div></div>';
+    h += '<span style="display:flex;align-items:center;gap:4px;font-size:8px;font-weight:700;color:' + s.c + ';background:' + s.bg + ';padding:2px 8px;border-radius:6px">' + s.l + '</span></div>';
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;background:rgba(6,7,8,.6);border-radius:8px;padding:8px 10px;border:1px solid #0f1410"><i class="fa-solid fa-key" style="font-size:7px;color:#2e3e35"></i><span style="font-size:10px;font-family:monospace;color:#4a5c52">' + esc(t.m) + '</span></div>';
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><div class="hp" style="flex:1"><div class="hpf" style="width:' + t.h + '%;background:' + hc + '"></div></div><span style="font-size:9px;font-family:monospace;color:' + hc + '">' + t.h + '%</span></div>';
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;color:#2e3e35;padding-top:10px;border-top:1px solid #0f1410">';
+    h += '<span><i class="fa-regular fa-clock" style="margin-right:4px"></i>' + esc(t.lu) + '</span>';
+    h += '<span>' + t.r.toLocaleString() + ' req</span>';
+    if (t.ar) { h += '<span style="color:#059669;font-weight:500"><i class="fa-solid fa-rotate" style="margin-right:3px"></i>Auto</span>'; } else { h += '<span>Manual</span>'; }
+    h += '</div></div>';
+  }
+  el.innerHTML = h;
+}
+
+function renderVaultAccessLog() {
+  var el = document.getElementById('val');
+  if (!el) return;
+  var icons = { success:'fa-check-circle', warning:'fa-exclamation-triangle', blocked:'fa-times-circle' };
+  var colors = { success:'#10b981', warning:'#f59e0b', blocked:'#ef4444' };
+  var h = '';
+  for (var i = 0; i < Math.min(8, LOGDATA.length); i++) {
+    var l = LOGDATA[i];
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px" onmouseover="this.style.background=\'rgba(25,28,30,.3)\'" onmouseout="this.style.background=\'\'">';
+    h += '<span style="font-size:9px;color:#2e3e35;font-family:monospace;width:50px;flex-shrink:0">' + esc(l.tm) + '</span>';
+    h += '<span style="flex-shrink:0;color:' + colors[l.st] + '"><i class="fa-solid fa-' + icons[l.st] + '" style="font-size:9px"></i></span>';
+    h += '<span style="font-size:10px;color:#5a6a62;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(l.ag) + ' > ' + esc(l.tk) + '</span></div>';
+  }
+  el.innerHTML = h;
+}
+
+function renderAgentCards() {
+  var el = document.getElementById('ag');
+  if (!el) return;
+  var h = '';
+  for (var i = 0; i < AG.length; i++) {
+    var a = AG[i];
+    var tkHTML = '';
+    for (var j = 0; j < a.tk.length; j++) {
+      var t = ftk(a.tk[j]);
+      if (!t) continue;
+      tkHTML += '<div style="display:flex;align-items:center;gap:4px;font-size:9px;background:rgba(25,28,30,.5);padding:4px 8px;border:1px solid #141e19"><i class="' + t.i + '" style="color:' + t.c + ';font-size:8px"></i><span style="color:#5a6a62">' + esc(t.n) + '</span></div>';
+    }
+    h += '<div class="ac">';
+    h += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">';
+    h += '<div style="width:48px;height:48px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:16px;position:relative;background:' + a.c + '0d;color:' + a.c + '"><i class="' + a.i + '"></i><span style="position:absolute;bottom:-2px;right:-2px;width:12px;height:12px;background:#10b981;border-radius:50%;border:2px solid #060708"></span></div>';
+    h += '<div style="flex:1;min-width:0"><h3 class="font-d font-bold text-sm">' + esc(a.n) + '</h3><p style="font-size:10px;color:#3a4a42;margin-top:2px">' + a.tkc + ' tasks - ' + esc(a.la) + '</p></div></div>';
+    h += '<p style="font-size:11px;color:#5a6a62;margin-bottom:12px;line-height:1.5">' + esc(a.d) + '</p>';
+    h += '<div style="padding-top:12px;border-top:1px solid #0f1410"><p style="font-size:8px;color:#2e3e35;letter-spacing:1px;margin-bottom:8px;font-weight:700">VAULT TOKENS</p>';
+    h += '<div style="display:flex;flex-wrap:wrap;gap:6px">' + tkHTML + '</div></div>';
+    h += '<button onclick="go(\'chat\');document.getElementById(\'cas\').value=\'' + a.id + '\'" style="margin-top:12px;width:100%;padding:8px;border-radius:10px;border:1px solid #141e19;font-size:10px;color:#4a5c52;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:500" onmouseover="this.style.color=\'#10b981\';this.style.borderColor=\'rgba(16,185,129,.2)\'" onmouseout="this.style.color=\'#4a5c52\';this.style.borderColor=\'#141e19\'"><i class="fa-solid fa-comments" style="font-size:9px"></i>Interact</button></div>';
+  }
+  el.innerHTML = h;
+}
+
+function renderLogTable() {
+  var el = document.getElementById('ltb');
+  if (!el) return;
+  var badges = {
+    success: '<span style="color:#10b981;font-size:9px;background:rgba(16,185,129,.08);padding:2px 8px;border-radius:6px;font-weight:600">Success</span>',
+    warning: '<span style="color:#f59e0b;font-size:9px;background:rgba(245,158,11,.08);padding:2px 8px;border-radius:6px;font-weight:600">Warning</span>',
+    blocked: '<span style="color:#ef4444;font-size:9px;background:rgba(239,68,68,.08);padding:2px 8px;border-radius:6px;font-weight:600">Blocked</span>'
+  };
+  var h = '';
+  for (var i = 0; i < LOGDATA.length; i++) {
+    var l = LOGDATA[i];
+    h += '<tr style="border-bottom:1px solid #0f1410" onmouseover="this.style.background=\'rgba(16,185,129,.02)\'" onmouseout="this.style.background=\'\'">';
+    h += '<td style="padding:10px 16px;font-size:10px;font-family:monospace;color:#2e3e35">' + esc(l.tm) + '</td>';
+    h += '<td style="padding:10px 16px;font-size:11px;color:#8a9a90">' + esc(l.ev) + '</td>';
+    h += '<td style="padding:10px 16px;font-size:11px;color:#5a6a62">' + esc(l.ag) + '</td>';
+    h += '<td style="padding:10px 16px;font-size:11px;font-weight:500">' + esc(l.tk) + '</td>';
+    h += '<td style="padding:10px 16px">' + (badges[l.st] || '') + '</td>';
+    h += '<td style="padding:10px 16px;font-size:10px;color:#3a4a42;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(l.dt) + '</td></tr>';
+  }
+  el.innerHTML = h;
+}
+
+function renderThreatFeed() {
+  var el = document.getElementById('tf');
+  if (!el) return;
+  var sevCSS = {
+    high: 'color:#ef4444;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.1)',
+    medium: 'color:#f59e0b;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.1)',
+    low: 'color:#06b6d4;background:rgba(6,182,212,.08);border:1px solid rgba(6,182,212,.1)'
+  };
+  var sevIcons = { high:'fa-skull-crossbones', medium:'fa-exclamation', low:'fa-eye' };
+  var h = '';
+  for (var i = 0; i < THREATDATA.length; i++) {
+    var t = THREATDATA[i];
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;border:1px solid #0f1410">';
+    h += '<div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;' + sevCSS[t.sv] + '"><i class="fa-solid fa-' + sevIcons[t.sv] + '" style="font-size:9px"></i></div>';
+    h += '<div style="flex:1;min-width:0">';
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px"><span style="font-size:10px;font-family:monospace;font-weight:600;color:#b0bab3">' + esc(t.ip) + '</span>';
+    h += '<span style="font-size:8px;' + sevCSS[t.sv] + ';letter-spacing:1px">' + t.sv.toUpperCase() + '</span></div>';
+    h += '<p style="font-size:9px;color:#5a6a62">' + esc(t.tp) + ' - ' + esc(t.dt) + '</p></div>';
+    h += '<div style="text-align:right;flex-shrink:0"><p style="font-size:9px;color:#5a6a62">' + esc(t.tk) + '</p><p style="font-size:8px;color:#2e3e35;font-family:monospace">' + esc(t.tm) + '</p></div></div>';
+  }
+  el.innerHTML = h;
+}
+
+/* =========================================================
+   CHARTS
+   ========================================================= */
+function initCharts() {
+  /* Line chart */
+  var c1 = document.getElementById('c1');
+  if (c1 && typeof Chart !== 'undefined') {
+    var ctx1 = c1.getContext('2d');
+    var grad = ctx1.createLinearGradient(0, 0, 0, 150);
+    grad.addColorStop(0, 'rgba(16,185,129,0.12)');
+    grad.addColorStop(1, 'rgba(16,185,129,0)');
+    new Chart(c1, {
+      type: 'line',
+      data: {
+        labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+        datasets: [
+          { label:'API Calls', data:[8420,9130,10240,9870,11200,7650,12840], borderColor:'#10b981', backgroundColor:grad, borderWidth:2, fill:true, tension:.4, pointBackgroundColor:'#10b981', pointBorderColor:'#0c0e10', pointBorderWidth:2, pointRadius:3, pointHoverRadius:6 },
+          { label:'Vault Lookups', data:[4200,4650,5120,4930,5600,3820,6420], borderColor:'#fbbf24', borderWidth:1.5, borderDash:[5,5], fill:false, tension:.4, pointRadius:0, pointHoverRadius:4, pointBackgroundColor:'#fbbf24' }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display:true, position:'top', align:'end', labels: { color:'#3a4a42', font:{size:9,family:'DM Sans'}, boxWidth:12, boxHeight:2, padding:12 } }, tooltip: { backgroundColor:'#121516', titleColor:'#e8ede9', bodyColor:'#8a9a90', borderColor:'#141e19', borderWidth:1, padding:10, cornerRadius:8 } },
+        scales: { x: { grid: { color:'rgba(20,30,25,0.5)' }, ticks: { color:'#2e3e35', font:{size:9} } }, y: { grid: { color:'rgba(20,30,25,0.5)' }, ticks: { color:'#2e3e35', font:{size:9} } } },
+        interaction: { intersect:false, mode:'index' }
+      }
+    });
+  }
+  /* Bar chart */
+  var c2 = document.getElementById('c2');
+  if (c2 && typeof Chart !== 'undefined') {
+    var barColors = [];
+    var barBorders = [];
+    var barLabels = [];
+    var barData = [];
+    for (var i = 0; i < TK.length; i++) {
+      barLabels.push(TK[i].n.split(' ')[0]);
+      barData.push(TK[i].r);
+      barColors.push(TK[i].c + '30');
+      barBorders.push(TK[i].c + '60');
+    }
+    new Chart(c2, {
+      type: 'bar',
+      data: {
+        labels: barLabels,
+        datasets: [{ data: barData, backgroundColor: barColors, borderColor: barBorders, borderWidth: 1, borderRadius: 5, barThickness: 14 }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display:false }, tooltip: { backgroundColor:'#121516', titleColor:'#e8ede9', bodyColor:'#8a9a90', borderColor:'#141e19', borderWidth:1, padding:10, cornerRadius:8 } },
+        scales: { x: { grid: { display:false }, ticks: { color:'#2e3e35', font:{size:8} } }, y: { grid: { color:'rgba(20,30,25,0.5)' }, ticks: { color:'#2e3e35', font:{size:8}, callback: function(v) { return v >= 1000 ? (v/1000)+'K' : v; } } } }
+      }
+    });
+  }
+}
+
+/* =========================================================
+   CHAT
+   ========================================================= */
+var chatReady = false;
+
+function initChat() {
+  if (chatReady) return;
+  chatReady = true;
+  var cm = document.getElementById('cm');
+  if (!cm) return;
+
+  /* Welcome screen */
+  var h = '<div style="text-align:center;padding:40px 20px">';
+  h += '<div style="width:56px;height:56px;border-radius:18px;background:rgba(16,185,129,.1);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;border:1px solid rgba(16,185,129,.15)"><i class="fa-solid fa-robot" style="font-size:22px;color:#10b981"></i></div>';
+  h += '<h3 class="font-d font-bold text-lg mb-2">Research Agent</h3>';
+  h += '<p style="font-size:12px;color:#4a5c52;max-width:320px;margin:0 auto;line-height:1.6">I can analyze GitHub repos, research documentation, and generate reports using tokens from your Auth0 Vault.</p>';
+  h += '<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:16px">';
+  h += '<span style="font-size:8px;color:#10b981;background:rgba(16,185,129,.08);padding:3px 8px;border-radius:6px;border:1px solid rgba(16,185,129,.1)"><i class="fa-brands fa-openai" style="margin-right:3px"></i>OpenAI</span>';
+  h += '<span style="font-size:8px;color:#e8ede9;background:rgba(232,237,233,.05);padding:3px 8px;border-radius:6px;border:1px solid rgba(232,237,233,.1)"><i class="fa-brands fa-github" style="margin-right:3px"></i>GitHub</span>';
+  h += '<span style="font-size:8px;color:#e8ede9;background:rgba(232,237,233,.05);padding:3px 8px;border-radius:6px;border:1px solid rgba(232,237,233,.1)"><i class="fa-solid fa-n" style="margin-right:3px"></i>Notion</span>';
+  h += '</div></div>';
+  cm.innerHTML = h;
+
+  /* Enter key to send */
+  document.getElementById('ci').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+  });
+}
+
+function addChatBubble(role, text, tokenIds) {
+  var cm = document.getElementById('cm');
+  if (!cm) return;
+  var d = document.createElement('div');
+  d.className = 'chat-bubble';
+  d.style.display = 'flex';
+  d.style.justifyContent = (role === 'user') ? 'flex-end' : 'flex-start';
+
+  if (role === 'user') {
+    d.innerHTML = '<div style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.15);border-radius:14px;border-top-right-radius:6px;padding:10px 14px;font-size:13px;color:#d0d8d2">' + esc(text) + '</div>';
+  } else {
+    /* Format text: **bold** and newlines */
+    var ft = esc(text).replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong style="color:#d0d8d2">$1</strong>');
+    /* Token badges */
+    var badges = '';
+    if (tokenIds && tokenIds.length > 0) {
+      badges = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:10px;padding-top:10px;border-top:1px solid #0f1410">';
+      for (var i = 0; i < tokenIds.length; i++) {
+        var tk = ftk(tokenIds[i]);
+        if (tk) {
+          badges += '<span style="display:inline-flex;align-items:center;gap:4px;font-size:7px;padding:2px 6px;border-radius:4px;background:rgba(25,28,30,.8);color:#3a4a42;border:1px solid #141e19"><i class="' + tk.i + '" style="color:' + tk.c + ';font-size:6px"></i>Vault: ' + esc(tk.n) + '</span>';
+        }
+      }
+      badges += '</div>';
+    }
+    d.innerHTML = '<div style="display:flex;align-items:start;gap:8px;max-width:88%"><div style="width:28px;height:28px;border-radius:10px;background:rgba(25,28,30,.8);display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid #141e19"><i class="fa-solid fa-robot" style="font-size:9px;color:#10b981"></i></div><div style="background:rgba(18,21,22,.8);border:1px solid #141e19;border-radius:14px;border-top-left-radius:6px;padding:10px 14px;font-size:11px;color:#8a9a90;line-height:1.6">' + ft + badges + '</div></div>';
+  }
+  cm.appendChild(d);
+  cm.scrollTop = cm.scrollHeight;
+}
+
+function showTyping() {
+  var cm = document.getElementById('cm');
+  if (!cm) return;
+  var d = document.createElement('div');
+  d.id = 'typing-indicator';
+  d.className = 'chat-bubble';
+  d.style.display = 'flex';
+  d.style.justifyContent = 'flex-start';
+  d.innerHTML = '<div style="display:flex;align-items:start;gap:8px"><div style="width:28px;height:28px;border-radius:10px;background:rgba(25,28,30,.8);display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid #141e19"><i class="fa-solid fa-robot" style="font-size:9px;color:#10b981"></i></div><div style="background:rgba(18,21,22,.8);border:1px solid #141e19;border-radius:14px;border-top-left-radius:6px;padding:12px 16px;display:flex;align-items:center;gap:6px"><span class="tdot"></span><span class="tdot"></span><span class="tdot"></span></div></div>';
+  cm.appendChild(d);
+  cm.scrollTop = cm.scrollHeight;
+}
+
+function hideTyping() {
+  var el = document.getElementById('typing-indicator');
+  if (el) el.remove();
+}
+
+function showVaultBadges(ids) {
+  var ind = document.getElementById('ti');
+  var bd = document.getElementById('tb');
+  if (!ind || !bd) return;
+  var h = '';
+  for (var i = 0; i < ids.length; i++) {
+    var t = ftk(ids[i]);
+    if (t) h += '<span style="display:inline-flex;align-items:center;gap:4px;font-size:8px;padding:3px 8px;border-radius:6px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.1);color:#10b981;font-weight:500">' + esc(t.n) + '</span>';
+  }
+  bd.innerHTML = h;
+  ind.style.opacity = '1';
+  setTimeout(function() { ind.style.opacity = '0'; }, 5000);
+}
+
+function qS(text) { document.getElementById('ci').value = text; sendMsg(); }
+
+function sendMsg() {
+  var inp = document.getElementById('ci');
+  var txt = inp.value.trim();
+  if (!txt) return;
+  var aid = document.getElementById('cas').value;
+  var responses = CR[aid];
+  if (!responses || responses.length === 0) return;
+
+  addChatBubble('user', txt, null);
+  inp.value = '';
+
+  var resp = responses[Math.floor(Math.random() * responses.length)];
+  showVaultBadges(resp.tu);
+
+  setTimeout(function() { showTyping(); }, 400);
+  setTimeout(function() {
+    hideTyping();
+    addChatBubble('agent', resp.t, resp.tu);
+  }, 1800 + Math.random() * 1200);
+}
+</script>
+</body>
+</html>
